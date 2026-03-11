@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#06060e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -56,10 +56,12 @@
   #topbar {
     position: fixed; top: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 430px;
-    background: rgba(0,9,31,0.95); backdrop-filter: blur(20px);
-    height: 54px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 16px; z-index: 300;
+    background: rgba(0,9,31,0.97); backdrop-filter: blur(20px);
+    height: calc(54px + env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 16px 10px; padding-top: env(safe-area-inset-top, 0px);
+    z-index: 300; box-sizing: border-box;
   }
   #topbar .date { color: var(--sub); font-size: 12px; font-weight: 400; }
   #topbar .logo {
@@ -72,7 +74,7 @@
   #topbar .settings { color: var(--muted); font-size: 18px; cursor: pointer; }
 
   /* ── PAGES */
-  #content { padding: 74px 16px 82px; min-height: 100dvh; }
+  #content { padding: calc(64px + env(safe-area-inset-top, 0px)) 16px calc(90px + env(safe-area-inset-bottom, 0px)); min-height: 100dvh; }
 
   /* ── BOTTOM NAV */
   #bottomnav {
@@ -81,15 +83,17 @@
     background: rgba(0,13,48,0.97); backdrop-filter: blur(20px);
     border-top: 1px solid var(--border);
     display: flex; align-items: center;
-    padding-bottom: env(safe-area-inset-bottom, 4px);
-    z-index: 300; position: fixed;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    z-index: 300;
     overflow: visible;
   }
   /* Sekme şeridi — tüm genişlik, kaydırılabilir */
   #nav-scroll {
-    flex: 1; height: 62px;
+    flex: 1; height: 62px; min-height: 62px;
     display: flex; align-items: center;
-    overflow-x: auto;
+    overflow-x: auto; overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none; -ms-overflow-style: none;
   }
@@ -1618,41 +1622,11 @@ const uid = () => Date.now()+Math.floor(Math.random()*9999);
 const now = new Date();
 
 // ═══════════════════════════ VARSAYILAN VERİ (ilk açılış için)
-const DEFAULT_TRANSACTIONS = [
-  {id:1,type:'income',amount:45000,currency:'TRY',category:'Maaş',note:'Mart maaşı',date:'2026-03-01'},
-  {id:2,type:'expense',amount:2800,currency:'TRY',category:'Market',note:'Haftalık market',date:'2026-03-03'},
-  {id:3,type:'expense',amount:850,currency:'TRY',category:'Ulaşım',note:'Akbil yükleme',date:'2026-03-04'},
-  {id:4,type:'income',amount:200,currency:'USD',category:'Freelance',note:'Logo tasarımı',date:'2026-03-05'},
-  {id:5,type:'expense',amount:450,currency:'TRY',category:'Restoran',note:'Akşam yemeği',date:'2026-03-06'},
-  {id:6,type:'expense',amount:1200,currency:'TRY',category:'Giyim',note:'Alışveriş',date:'2026-03-07'},
-  {id:7,type:'income',amount:5000,currency:'TRY',category:'Kira Geliri',note:'Kiracı ödemesi',date:'2026-03-08'},
-  {id:8,type:'expense',amount:680,currency:'TRY',category:'Sağlık',note:'Eczane',date:'2026-03-09'},
-];
-const DEFAULT_GOALS = [
-  {id:1,name:'Tatil Fonu',target:50000,current:18500,currency:'TRY',deadline:'2026-08-01',icon:'✈️'},
-  {id:2,name:'MacBook Pro',target:2500,current:1200,currency:'USD',deadline:'2026-06-01',icon:'💻'},
-  {id:3,name:'Acil Durum Fonu',target:100000,current:45000,currency:'TRY',deadline:'2027-01-01',icon:'🛡️'},
-];
-const DEFAULT_SUBS = [
-  {id:1,name:'Netflix',amount:12.99,currency:'USD',billing:'Aylık',nextDate:'2026-03-15',icon:'🎬'},
-  {id:2,name:'Spotify',amount:10.99,currency:'USD',billing:'Aylık',nextDate:'2026-03-20',icon:'🎵'},
-  {id:3,name:'iCloud',amount:2.99,currency:'USD',billing:'Aylık',nextDate:'2026-03-18',icon:'☁️'},
-  {id:4,name:'Adobe CC',amount:54.99,currency:'USD',billing:'Aylık',nextDate:'2026-03-25',icon:'🎨'},
-  {id:5,name:'Gym',amount:800,currency:'TRY',billing:'Aylık',nextDate:'2026-03-10',icon:'🏋️'},
-];
-const DEFAULT_BILLS = [
-  {id:1,name:'Elektrik',amount:450,currency:'TRY',dueDate:'2026-03-12',paid:false,icon:'⚡'},
-  {id:2,name:'Doğalgaz',amount:680,currency:'TRY',dueDate:'2026-03-15',paid:false,icon:'🔥'},
-  {id:3,name:'İnternet',amount:350,currency:'TRY',dueDate:'2026-03-20',paid:true,icon:'📡'},
-  {id:4,name:'Su',amount:180,currency:'TRY',dueDate:'2026-03-25',paid:false,icon:'💧'},
-  {id:5,name:'Kira',amount:15000,currency:'TRY',dueDate:'2026-03-05',paid:true,icon:'🏠'},
-];
-const DEFAULT_INV = [
-  {id:1,name:'THYAO',type:'Hisse',buyPrice:280,currentPrice:312,qty:50,currency:'TRY'},
-  {id:2,name:'Bitcoin',type:'Kripto',buyPrice:62000,currentPrice:84500,qty:0.05,currency:'USD'},
-  {id:3,name:'Altın (gram)',type:'Emtia',buyPrice:2800,currentPrice:3150,qty:10,currency:'TRY'},
-  {id:4,name:'Enpara Fon',type:'Fon',buyPrice:10000,currentPrice:11200,qty:1,currency:'TRY'},
-];
+const DEFAULT_TRANSACTIONS = [];
+const DEFAULT_GOALS = [];
+const DEFAULT_SUBS = [];
+const DEFAULT_BILLS = [];
+const DEFAULT_INV = [];
 
 // ═══════════════════════════ LOCALSTORAGE
 const LS = {
@@ -1677,11 +1651,7 @@ let transactions, goals, subscriptions, bills, investments;
 
 
 
-const DEFAULT_RECURRING = [
-  {id:1, type:'income',  amount:45000, currency:'TRY', category:'Maaş',        note:'Aylık maaş',   freq:'monthly', day:1,  startDate:'2026-01-01', lastProcessed:null, active:true},
-  {id:2, type:'expense', amount:15000, currency:'TRY', category:'Kira',        note:'Ev kirası',    freq:'monthly', day:5,  startDate:'2026-01-01', lastProcessed:null, active:true},
-  {id:3, type:'expense', amount:12.99, currency:'USD', category:'Eğlence',     note:'Netflix',      freq:'monthly', day:15, startDate:'2026-01-01', lastProcessed:null, active:true},
-];
+const DEFAULT_RECURRING = [];
 const DEFAULT_CAT_IN  = ['Maaş','Freelance','Kira Geliri','Yatırım','Hediye','Diğer'];
 const DEFAULT_CAT_EX  = ['Market','Restoran','Ulaşım','Giyim','Sağlık','Eğitim','Eğlence','Fatura','Kira','Diğer'];
 const DEFAULT_BUDGET  = {Market:5000,Restoran:2000,Ulaşım:1500,Giyim:3000,Sağlık:1000,Eğlence:1500,Fatura:3000};
