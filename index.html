@@ -704,6 +704,7 @@
     animation: skeletonShimmer 1.4s ease infinite;
     flex-shrink: 0;
   }
+  @keyframes slideUp { from { transform:translateY(100%);opacity:0 } to { transform:translateY(0);opacity:1 } }
   @keyframes skeletonShimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
@@ -855,9 +856,12 @@
 
     <!-- Stats Grid -->
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val" id="stat-goals" style="color:var(--purple)">0</div><div class="stat-lbl">Hedef</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-subs" style="color:var(--blue)">0</div><div class="stat-lbl">Abonelik</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-bills" style="color:var(--red)">0</div><div class="stat-lbl">Ödenmedi</div></div>
+      <div class="stat-box" onclick="showStatPopup('goals')" style="cursor:pointer;transition:border-color 0.2s">
+        <div class="stat-val" id="stat-goals" style="color:var(--purple)">0</div><div class="stat-lbl">Hedef</div></div>
+      <div class="stat-box" onclick="showStatPopup('subs')" style="cursor:pointer;transition:border-color 0.2s">
+        <div class="stat-val" id="stat-subs" style="color:var(--blue)">0</div><div class="stat-lbl">Abonelik</div></div>
+      <div class="stat-box" onclick="showStatPopup('bills')" style="cursor:pointer;transition:border-color 0.2s">
+        <div class="stat-val" id="stat-bills" style="color:var(--red)">0</div><div class="stat-lbl">Ödenmedi</div></div>
     </div>
 
     <!-- Donut Chart -->
@@ -1725,6 +1729,7 @@ let qType = 'income';
 function openQuickAdd() {
   const bg = document.getElementById('quick-modal-bg');
   bg.classList.add('open');
+  document.body.style.overflow = 'hidden';
   setQType('income');
   document.getElementById('q-amount').value = '';
   document.getElementById('q-note').value = '';
@@ -1733,6 +1738,7 @@ function openQuickAdd() {
 function closeQuickAdd(e) {
   if (e && e.target !== document.getElementById('quick-modal-bg')) return;
   document.getElementById('quick-modal-bg').classList.remove('open');
+  document.body.style.overflow = '';
 }
 function setQType(type) {
   qType = type;
@@ -2715,6 +2721,90 @@ function renderChart() {
 
 // ═══════════════════════════ RENDER FUNCTIONS
 
+
+function closeStatPopup() {
+  document.getElementById('stat-popup-bg').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function showStatPopup(type) {
+  const bg  = document.getElementById('stat-popup-bg');
+  const box = document.getElementById('stat-popup-content');
+  document.body.style.overflow = 'hidden';
+  bg.style.display = 'flex';
+
+  if (type === 'goals') {
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <p style="font-size:18px;font-weight:700;color:var(--text)">🎯 Hedefler</p>
+        <span style="font-size:12px;color:var(--muted)">${goals.length} hedef</span>
+      </div>
+      ${goals.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:24px 0">Henüz hedef eklenmedi</p>' :
+        goals.map(g => {
+          const pct  = Math.min(100, g.current / g.target * 100);
+          const done = g.current >= g.target;
+          return `<div style="margin-bottom:12px;background:rgba(0,12,50,0.5);border:1px solid var(--border);border-radius:14px;padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-size:14px;font-weight:600;color:var(--text)">${g.icon||'🎯'} ${g.name}</span>
+              <span style="font-size:12px;font-weight:700;color:${done?'var(--green)':'var(--purple)'}">${pct.toFixed(0)}%</span>
+            </div>
+            <div style="height:6px;background:rgba(180,204,232,0.08);border-radius:3px;overflow:hidden;margin-bottom:8px">
+              <div style="height:100%;width:${pct}%;background:${done?'var(--green)':'var(--purple)'};border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-size:11px;color:var(--muted)">${fmt(g.current,'TRY')}</span>
+              <span style="font-size:11px;color:var(--muted)">${done?'✓ Tamamlandı':'Hedef: '+fmt(g.target,'TRY')}</span>
+            </div>
+          </div>`;
+        }).join('')}`;
+
+  } else if (type === 'subs') {
+    const monthly = subscriptions.reduce((s, sub) => {
+      const m = sub.freq==='yearly' ? sub.amount/12 : sub.freq==='weekly' ? sub.amount*4.33 : sub.amount;
+      return s + toTRY(m, sub.currency||'TRY');
+    }, 0);
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <p style="font-size:18px;font-weight:700;color:var(--text)">📱 Abonelikler</p>
+        <span style="font-size:12px;color:var(--blue);font-weight:700">${fmt(monthly,'TRY')}/ay</span>
+      </div>
+      ${subscriptions.length === 0 ? '<p style="color:var(--muted);text-align:center;padding:24px 0">Henüz abonelik eklenmedi</p>' :
+        subscriptions.map(sub => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(0,12,50,0.5);border:1px solid var(--border);border-radius:14px;margin-bottom:10px">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(91,168,232,0.12);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${sub.icon||'📱'}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${sub.name}</div>
+              <div style="font-size:11px;color:var(--muted)">${sub.freq==='monthly'?'Aylık':sub.freq==='yearly'?'Yıllık':'Haftalık'}</div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(sub.amount, sub.currency||'TRY')}</div>
+          </div>`).join('')}`;
+
+  } else if (type === 'bills') {
+    const unpaid = bills.filter(b => !b.paid);
+    const total  = unpaid.reduce((s,b) => s + toTRY(b.amount, b.currency||'TRY'), 0);
+    const todayStr = new Date().toISOString().split('T')[0];
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <p style="font-size:18px;font-weight:700;color:var(--text)">💸 Ödenmemiş Faturalar</p>
+        <span style="font-size:12px;color:var(--red);font-weight:700">${fmt(total,'TRY')}</span>
+      </div>
+      ${unpaid.length === 0 ? '<p style="color:var(--green);text-align:center;padding:24px 0">✓ Tüm faturalar ödendi</p>' :
+        unpaid.map(b => {
+          const overdue  = b.dueDate && b.dueDate < todayStr;
+          const daysLeft = b.dueDate ? Math.round((new Date(b.dueDate)-new Date())/(864e5)) : null;
+          return `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(0,12,50,0.5);border:1px solid ${overdue?'rgba(224,104,120,0.35)':'var(--border)'};border-radius:14px;margin-bottom:10px">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(224,104,120,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${b.icon||'⚡'}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${b.name}</div>
+              <div style="font-size:11px;color:${overdue?'var(--red)':'var(--muted)'}">
+                ${daysLeft===null?'Tarih yok':overdue?'⚠ '+Math.abs(daysLeft)+' gün gecikti':daysLeft===0?'⚠ Bugün son!':daysLeft+' gün kaldı'}
+              </div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(b.amount, b.currency||'TRY')}</div>
+          </div>`;
+        }).join('')}`;
+  }
+}
 function renderDashboard() {
   // Tüm gelirleri/giderleri TRY'ye çevir (kur dahil)
   const tryIncome  = transactions.filter(t=>t.type==='income') .reduce((s,t)=>s+toTRY(t.amount,t.currency),0);
@@ -3385,22 +3475,43 @@ function removeCat(type, idx) {
 }
 
 function resetAllData() {
-  if (!confirm('Tüm veriler silinecek. Emin misin?')) return;
-  localStorage.removeItem(LS.KEY);
-  transactions = [...DEFAULT_TRANSACTIONS];
-  goals        = [...DEFAULT_GOALS];
-  subscriptions= [...DEFAULT_SUBS];
-  bills        = [...DEFAULT_BILLS];
-  investments  = [...DEFAULT_INV];
-  budget       = { ...DEFAULT_BUDGET };
-  catIn        = [...DEFAULT_CAT_IN];
-  catEx        = [...DEFAULT_CAT_EX];
-  settings     = { name: '', currency: 'TRY' };
-  recurring    = DEFAULT_RECURRING.map(r=>({...r}));
-  saveData();
-  renderAll();
-  renderSettingsPage();
-  showToast('✓ Veriler sıfırlandı');
+  showConfirmModal('🗑', 'Verileri Sıfırla',
+    'Tüm işlemler, hedefler ve ayarlar silinecek. Bu işlem geri alınamaz.',
+    'Sıfırla',
+    function() {
+      localStorage.removeItem(LS.KEY);
+      transactions  = [...DEFAULT_TRANSACTIONS];
+      goals         = [...DEFAULT_GOALS];
+      subscriptions = [...DEFAULT_SUBS];
+      bills         = [...DEFAULT_BILLS];
+      investments   = [...DEFAULT_INV];
+      budget        = { ...DEFAULT_BUDGET };
+      catIn         = [...DEFAULT_CAT_IN];
+      catEx         = [...DEFAULT_CAT_EX];
+      settings      = { name: '', currency: 'TRY' };
+      recurring     = DEFAULT_RECURRING.map(r => ({...r}));
+      saveData();
+      renderAll();
+      renderSettingsPage();
+      showToast('Veriler sıfırlandı');
+    }
+  );
+}
+
+function showConfirmModal(icon, title, desc, okLabel, onOk) {
+  document.getElementById('confirm-modal-icon').textContent  = icon;
+  document.getElementById('confirm-modal-title').textContent = title;
+  document.getElementById('confirm-modal-desc').textContent  = desc;
+  const okBtn = document.getElementById('confirm-modal-ok');
+  okBtn.textContent = okLabel;
+  okBtn.onclick = function() { closeConfirmModal(); onOk(); };
+  document.getElementById('confirm-modal-bg').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirm-modal-bg').style.display = 'none';
+  document.body.style.overflow = '';
 }
 // ═══════════════════════════ RENDER ALL
 function renderAll() {
@@ -3670,5 +3781,26 @@ setTimeout(() => {
 }, 2500);
 </script>
 
+
+<!-- Onay Modalı -->
+<div id="confirm-modal-bg" style="position:fixed;inset:0;background:rgba(0,5,20,0.82);backdrop-filter:blur(10px);z-index:600;display:none;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeConfirmModal()">
+  <div style="background:linear-gradient(145deg,#000d30,#001040);border:1px solid rgba(180,204,232,0.25);border-radius:20px;padding:28px 24px;width:100%;max-width:320px;text-align:center;animation:pageIn 0.3s cubic-bezier(0.22,1,0.36,1) both">
+    <div id="confirm-modal-icon" style="font-size:36px;margin-bottom:12px">🗑</div>
+    <div id="confirm-modal-title" style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px"></div>
+    <div id="confirm-modal-desc"  style="font-size:13px;color:var(--sub);line-height:1.55;margin-bottom:24px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeConfirmModal()" style="flex:1;padding:13px;background:rgba(180,204,232,0.07);border:1px solid var(--border);border-radius:12px;color:var(--sub);font-size:14px;font-weight:600;cursor:pointer;font-family:'Sora',sans-serif">İptal</button>
+      <button id="confirm-modal-ok" style="flex:1;padding:13px;background:linear-gradient(135deg,#c0392b,#e74c3c);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif">Evet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stat Popup -->
+<div id="stat-popup-bg" style="position:fixed;inset:0;background:rgba(0,5,20,0.75);backdrop-filter:blur(10px);z-index:500;display:none;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeStatPopup()">
+  <div id="stat-popup-box" style="background:linear-gradient(180deg,#000d30,#001040);border:1px solid rgba(180,204,232,0.2);border-radius:24px 24px 0 0;width:100%;max-width:430px;max-height:75vh;overflow-y:auto;padding:20px 16px 40px;animation:slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both">
+    <div style="width:36px;height:4px;background:rgba(180,204,232,0.18);border-radius:2px;margin:0 auto 18px"></div>
+    <div id="stat-popup-content"></div>
+  </div>
+</div>
 </body>
 </html>
