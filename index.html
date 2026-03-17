@@ -820,6 +820,38 @@
   .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .cat-bar-wrap { flex: 1; height: 6px; background: rgba(180,204,232,0.08); border-radius: 3px; overflow: hidden; }
   .cat-bar-fill { height: 100%; border-radius: 3px; animation: progGrow 0.8s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* Taksit rozeti */
+  .installment-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(136,120,224,0.15); border: 1px solid rgba(136,120,224,0.3);
+    color: var(--purple); border-radius: 6px;
+    padding: 2px 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  /* Toggle switch */
+  .toggle-switch {
+    position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: rgba(180,204,232,0.12); border-radius: 20px;
+    transition: 0.25s; border: 1px solid var(--border);
+  }
+  .toggle-slider:before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px; left: 2px; top: 2px;
+    background: var(--sub); border-radius: 50%; transition: 0.25s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: rgba(136,120,224,0.35); border-color: var(--purple); }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); background: var(--purple); }
+  /* Taksit önizleme */
+  .installment-preview {
+    background: rgba(136,120,224,0.08); border: 1px solid rgba(136,120,224,0.2);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
+    font-size: 12px; color: var(--sub); line-height: 1.6;
+  }
+  .installment-preview strong { color: var(--purple); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -922,6 +954,33 @@
         <div class="field"><label>Kategori</label><select id="tx-category"></select></div>
         <div class="field"><label>Not</label><input type="text" id="tx-note" placeholder="Açıklama..."></div>
         <div class="field"><label>Tarih</label><input type="date" id="tx-date"></div>
+        <!-- Taksitli toggle — sadece giderde gösterilir -->
+        <div id="installment-toggle-row" style="display:none;align-items:center;justify-content:space-between;background:rgba(0,10,40,0.4);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:12px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">Taksitli Ödeme</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Kredi kartı, kredi vb.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="installment-toggle" onchange="onInstallmentToggle()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Taksit alanları -->
+        <div id="installment-fields" style="display:none">
+          <div class="field-row col2">
+            <div class="field">
+              <label>Taksit Sayısı</label>
+              <input type="number" id="tx-installment-count" min="2" max="60" placeholder="12" oninput="updateInstallmentPreview()">
+            </div>
+            <div class="field">
+              <label>Başlangıç Ayı</label>
+              <input type="month" id="tx-installment-start" oninput="updateInstallmentPreview()">
+            </div>
+          </div>
+          <div id="installment-preview" class="installment-preview" style="display:none"></div>
+        </div>
+
         <button id="tx-save-btn" class="btn-gold" style="width:100%;padding:13px;font-size:14px;margin-top:2px" onclick="addTransaction()">Kaydet</button>
       </div>
     </div>
@@ -1804,10 +1863,19 @@ function toggleForm(id) {
 // ═══════════════════════════ TX FORM
 function setTxType(type) {
   txType = type;
-  document.getElementById('tx-type-income').className = 'type-btn income' + (type==='income'?' active':'');
-  document.getElementById('tx-type-expense').className = 'type-btn expense' + (type==='expense'?' active':'');
-  fillCatSelect('tx-category', type==='income'?catIn:catEx);
+  document.getElementById('tx-type-income').className  = 'type-btn income'  + (type==='income'  ? ' active' : '');
+  document.getElementById('tx-type-expense').className = 'type-btn expense' + (type==='expense' ? ' active' : '');
+  fillCatSelect('tx-category', type === 'income' ? catIn : catEx);
+  // Taksit toggle — sadece giderde
+  const toggleRow = document.getElementById('installment-toggle-row');
+  if (toggleRow) toggleRow.style.display = type === 'expense' ? 'flex' : 'none';
+  // Gelire geçince taksiti kapat
+  if (type === 'income') {
+    const tog = document.getElementById('installment-toggle');
+    if (tog) { tog.checked = false; onInstallmentToggle(); }
+  }
 }
+
 function fillCatSelect(id, cats) {
   const sel = document.getElementById(id);
   sel.innerHTML = cats.map(c=>`<option>${c}</option>`).join('');
@@ -1823,12 +1891,63 @@ function setTxFilter(f, btn) {
   btn.classList.add('active');
   renderTxList();
 }
+
+function onInstallmentToggle() {
+  const on     = document.getElementById('installment-toggle').checked;
+  const fields = document.getElementById('installment-fields');
+  if (fields) fields.style.display = on ? 'block' : 'none';
+  if (on) {
+    // Başlangıç ayını bu aya set et
+    const d = new Date();
+    const ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const startEl = document.getElementById('tx-installment-start');
+    if (startEl && !startEl.value) startEl.value = ym;
+    updateInstallmentPreview();
+  } else {
+    const prev = document.getElementById('installment-preview');
+    if (prev) prev.style.display = 'none';
+  }
+}
+
+function updateInstallmentPreview() {
+  const amtEl   = document.getElementById('tx-amount');
+  const cntEl   = document.getElementById('tx-installment-count');
+  const startEl = document.getElementById('tx-installment-start');
+  const prev    = document.getElementById('installment-preview');
+  if (!prev) return;
+
+  const amt   = parseFloat(amtEl.value);
+  const cnt   = parseInt(cntEl.value);
+  const start = startEl.value; // "2026-03"
+
+  if (!amt || !cnt || cnt < 2 || !start) { prev.style.display = 'none'; return; }
+
+  const [y, m] = start.split('-').map(Number);
+  const endDate = new Date(y, m - 1 + cnt - 1, 1);
+  const endStr  = endDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  const total   = amt * cnt;
+  const cur     = document.getElementById('tx-currency').value || 'TRY';
+
+  prev.style.display = 'block';
+  prev.innerHTML = `
+    <strong>${cnt} taksit × ${fmt(amt, cur)}</strong><br>
+    Toplam: <strong>${fmt(total, cur)}</strong> &nbsp;·&nbsp;
+    Son taksit: <strong>${endStr}</strong>
+  `;
+}
+
+// Tarih inputunu month'a senkronize et (taksit modu açıkken)
+function installmentMonthToDate(ym) {
+  // "2026-03" → "2026-03-01" (ayın ilk günü)
+  return ym ? ym + '-01' : today();
+}
+
 function addTransaction() {
   const amt = parseFloat(document.getElementById('tx-amount').value);
   if (!amt) { document.getElementById('tx-amount').focus(); return; }
 
   if (editingTxId !== null) {
-    // Düzenleme modu — mevcut işlemi güncelle
+    // Düzenleme modu — tekli güncelleme (taksit grubunu etkilemez)
     const idx = transactions.findIndex(t => t.id === editingTxId);
     if (idx !== -1) {
       transactions[idx] = {
@@ -1842,23 +1961,67 @@ function addTransaction() {
       };
     }
     editingTxId = null;
-    document.getElementById('tx-save-btn').textContent = 'Kaydet';
+    document.getElementById('tx-save-btn').textContent   = 'Kaydet';
     document.getElementById('tx-form-title').textContent = 'Yeni İşlem';
+
   } else {
-    // Yeni ekleme modu
-    transactions.unshift({
-      id:       uid(),
-      type:     txType,
-      amount:   amt,
-      currency: document.getElementById('tx-currency').value,
-      category: document.getElementById('tx-category').value,
-      note:     document.getElementById('tx-note').value || '-',
-      date:     document.getElementById('tx-date').value || today(),
-    });
+    const isInstallment = txType === 'expense' &&
+      document.getElementById('installment-toggle') &&
+      document.getElementById('installment-toggle').checked;
+
+    if (isInstallment) {
+      // ── Taksitli ekleme
+      const cnt   = parseInt(document.getElementById('tx-installment-count').value) || 0;
+      const start = document.getElementById('tx-installment-start').value; // "2026-03"
+      if (cnt < 2 || !start) {
+        showToast('Taksit sayısı ve başlangıç ayını gir');
+        return;
+      }
+      const [sy, sm] = start.split('-').map(Number);
+      const cur      = document.getElementById('tx-currency').value;
+      const cat      = document.getElementById('tx-category').value;
+      const note     = document.getElementById('tx-note').value || '-';
+      const groupId  = uid(); // tüm taksitler bu id ile bağlı
+
+      for (let i = 0; i < cnt; i++) {
+        const tDate = new Date(sy, sm - 1 + i, 1);
+        const dateStr = localDateStr(tDate);
+        transactions.push({
+          id:               uid(),
+          type:             'expense',
+          amount:           amt,
+          currency:         cur,
+          category:         cat,
+          note:             note,
+          date:             dateStr,
+          installmentGroup: groupId,
+          installmentNo:    i + 1,
+          installmentTotal: cnt,
+        });
+      }
+      // Tarihe göre sırala (yeniden eskiye)
+      transactions.sort((a, b) => b.date.localeCompare(a.date));
+
+      // Taksit toggle'ı sıfırla
+      document.getElementById('installment-toggle').checked = false;
+      onInstallmentToggle();
+
+    } else {
+      // ── Normal ekleme
+      transactions.unshift({
+        id:       uid(),
+        type:     txType,
+        amount:   amt,
+        currency: document.getElementById('tx-currency').value,
+        category: document.getElementById('tx-category').value,
+        note:     document.getElementById('tx-note').value || '-',
+        date:     document.getElementById('tx-date').value || today(),
+      });
+    }
   }
 
   document.getElementById('tx-amount').value = '';
-  document.getElementById('tx-note').value = '';
+  document.getElementById('tx-note').value   = '';
   saveData();
   toggleForm('tx-form');
   renderAll();
@@ -2937,7 +3100,10 @@ function renderTxList() {
         <div class="tx-icon ${t.type}">${t.type==='income'?'↑':'↓'}</div>
         <div>
           <p style="font-size:14px;font-weight:500;margin-bottom:2px">${t.category}</p>
-          <p style="color:var(--sub);font-size:12px;margin-top:2px">${t.note} · ${t.date}</p>
+          <p style="color:var(--sub);font-size:12px;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              ${t.installmentGroup ? `<span class="installment-badge">📋 ${t.installmentNo}/${t.installmentTotal}</span>` : ''}
+              <span>${t.note} · ${t.date}</span>
+            </p>
         </div>
       </div>
       <div style="text-align:right;flex-shrink:0">
@@ -2967,7 +3133,42 @@ function renderTxList() {
   `).join('');
 }
 function deleteTx(id) {
-  transactions = transactions.filter(t => t.id !== id);
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+
+  if (t.installmentGroup) {
+    const groupCount = transactions.filter(x => x.installmentGroup === t.installmentGroup).length;
+    if (groupCount > 1) {
+      showConfirmModal(
+        '🗑',
+        'Taksiti Sil',
+        `Bu taksit ${t.installmentNo}/${t.installmentTotal} numaralı. Ne yapmak istersin?`,
+        'Tüm Taksitleri Sil',
+        () => {
+          const gid = t.installmentGroup;
+          transactions = transactions.filter(x => x.installmentGroup !== gid);
+          saveData(); renderTxList(); renderDashboard(); renderBudget();
+        }
+      );
+      // Aynı anda tekli silme butonu da sun
+      const okBtn = document.getElementById('confirm-modal-ok');
+      const box   = okBtn.parentElement;
+      if (!document.getElementById('confirm-single-btn')) {
+        const singleBtn = document.createElement('button');
+        singleBtn.id = 'confirm-single-btn';
+        singleBtn.textContent = 'Sadece Bunu Sil';
+        singleBtn.style.cssText = 'flex:1;padding:13px;background:rgba(180,204,232,0.07);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:Sora,sans-serif';
+        singleBtn.onclick = () => {
+          closeConfirmModal();
+          transactions = transactions.filter(x => x.id !== id);
+          saveData(); renderTxList(); renderDashboard(); renderBudget();
+        };
+        box.insertBefore(singleBtn, okBtn);
+      }
+      return;
+    }
+  }
+  transactions = transactions.filter(x => x.id !== id);
   saveData();
   renderTxList();
   renderDashboard();
@@ -2980,6 +3181,8 @@ function cancelEditTx() {
   document.getElementById('tx-form-title').textContent = 'Yeni İşlem';
   document.getElementById('tx-amount').value = '';
   document.getElementById('tx-note').value   = '';
+  const tog = document.getElementById('installment-toggle');
+  if (tog) { tog.checked = false; onInstallmentToggle(); }
   toggleForm('tx-form');
 }
 
@@ -3599,6 +3802,9 @@ function showConfirmModal(icon, title, desc, okLabel, onOk) {
 function closeConfirmModal() {
   document.getElementById('confirm-modal-bg').style.display = 'none';
   document.body.style.overflow = '';
+  // Taksit silme modalında eklenen ekstra butonu temizle
+  const singleBtn = document.getElementById('confirm-single-btn');
+  if (singleBtn) singleBtn.remove();
 }
 // ═══════════════════════════ RENDER ALL
 function renderAll() {
