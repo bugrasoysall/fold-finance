@@ -250,10 +250,18 @@
   .btn-ghost.active, .btn-ghost:hover {
     border-color: var(--silver); background: var(--silver-gl); color: var(--silver-br);
   }
+  .btn-edit {
+    background: none; border: none; color: var(--blue);
+    cursor: pointer; padding: 6px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s, background 0.2s; line-height: 0;
+  }
+  .btn-edit:hover { color: var(--silver); background: rgba(91,168,232,0.12); }
   .btn-delete {
     background: none; border: none; color: var(--muted);
-    cursor: pointer; font-size: 12px; font-family: 'Sora', sans-serif;
-    padding: 0; transition: color 0.2s;
+    cursor: pointer; padding: 6px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s, background 0.2s; line-height: 0;
   }
   .btn-delete:hover { color: var(--red); }
 
@@ -897,6 +905,10 @@
 
     <div id="tx-form" style="display:none">
       <div class="form-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span id="tx-form-title" style="font-size:13px;font-weight:700;color:var(--sub);letter-spacing:0.5px;text-transform:uppercase">Yeni İşlem</span>
+          <button onclick="cancelEditTx()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
+        </div>
         <div class="type-toggle">
           <button class="type-btn income active" id="tx-type-income" onclick="setTxType('income')">↑ &nbsp;Gelir</button>
           <button class="type-btn expense" id="tx-type-expense" onclick="setTxType('expense')">↓ &nbsp;Gider</button>
@@ -910,7 +922,7 @@
         <div class="field"><label>Kategori</label><select id="tx-category"></select></div>
         <div class="field"><label>Not</label><input type="text" id="tx-note" placeholder="Açıklama..."></div>
         <div class="field"><label>Tarih</label><input type="date" id="tx-date"></div>
-        <button class="btn-gold" style="width:100%;padding:13px;font-size:14px;margin-top:2px" onclick="addTransaction()">Kaydet</button>
+        <button id="tx-save-btn" class="btn-gold" style="width:100%;padding:13px;font-size:14px;margin-top:2px" onclick="addTransaction()">Kaydet</button>
       </div>
     </div>
 
@@ -1688,7 +1700,8 @@ const GOAL_ICONS = ['🎯','✈️','🏠','🚗','💻','📱','👶','💍','�
 const INV_COLORS = {Hisse:'#5b8dd9',Kripto:'#9b6be0',Emtia:'#b4cce8',Fon:'#4ecb96',Tahvil:'#9898b2'};
 
 let txFilter = 'all';
-let txType   = 'income';
+let txType      = 'income';
+let editingTxId = null; // null=yeni, number=düzenleme modu
 let recType  = 'income';
 let selectedGoalIcon = '🎯';
 let currentMoreTab = 'goals';
@@ -1812,21 +1825,74 @@ function setTxFilter(f, btn) {
 }
 function addTransaction() {
   const amt = parseFloat(document.getElementById('tx-amount').value);
-  if(!amt) return alert('Tutar gir!');
-  transactions.unshift({
-    id: uid(),
-    type: txType,
-    amount: amt,
-    currency: document.getElementById('tx-currency').value,
-    category: document.getElementById('tx-category').value,
-    note: document.getElementById('tx-note').value || '-',
-    date: document.getElementById('tx-date').value || today(),
-  });
+  if (!amt) { document.getElementById('tx-amount').focus(); return; }
+
+  if (editingTxId !== null) {
+    // Düzenleme modu — mevcut işlemi güncelle
+    const idx = transactions.findIndex(t => t.id === editingTxId);
+    if (idx !== -1) {
+      transactions[idx] = {
+        ...transactions[idx],
+        type:     txType,
+        amount:   amt,
+        currency: document.getElementById('tx-currency').value,
+        category: document.getElementById('tx-category').value,
+        note:     document.getElementById('tx-note').value || '-',
+        date:     document.getElementById('tx-date').value || today(),
+      };
+    }
+    editingTxId = null;
+    document.getElementById('tx-save-btn').textContent = 'Kaydet';
+    document.getElementById('tx-form-title').textContent = 'Yeni İşlem';
+  } else {
+    // Yeni ekleme modu
+    transactions.unshift({
+      id:       uid(),
+      type:     txType,
+      amount:   amt,
+      currency: document.getElementById('tx-currency').value,
+      category: document.getElementById('tx-category').value,
+      note:     document.getElementById('tx-note').value || '-',
+      date:     document.getElementById('tx-date').value || today(),
+    });
+  }
+
   document.getElementById('tx-amount').value = '';
   document.getElementById('tx-note').value = '';
   saveData();
   toggleForm('tx-form');
   renderAll();
+}
+
+function editTx(id) {
+  const t = transactions.find(t => t.id === id);
+  if (!t) return;
+
+  editingTxId = id;
+
+  // Formu aç
+  const form = document.getElementById('tx-form');
+  if (form.style.display === 'none') toggleForm('tx-form');
+
+  // Form başlığı + buton
+  document.getElementById('tx-form-title').textContent = 'İşlemi Düzenle';
+  document.getElementById('tx-save-btn').textContent   = 'Güncelle';
+
+  // Alanları doldur
+  setTxType(t.type);
+  document.getElementById('tx-amount').value   = t.amount;
+  document.getElementById('tx-currency').value = t.currency;
+  document.getElementById('tx-date').value     = t.date;
+  document.getElementById('tx-note').value     = t.note !== '-' ? t.note : '';
+
+  // Kategoriyi seç (render sonrası)
+  setTimeout(() => {
+    const sel = document.getElementById('tx-category');
+    if (sel) sel.value = t.category;
+  }, 50);
+
+  // Forma kaydır
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ═══════════════════════════ INVESTMENTS
@@ -2305,19 +2371,34 @@ function toggleRecurring(id) {
 }
 
 // Bir sonraki çalışma tarihini hesapla
+// Yerel saat dilimine göre YYYY-MM-DD döndürür (toISOString UTC'ye çevirdiği için kullanılmaz)
+function localDateStr(d) {
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+// Bir sonraki çalışma tarihini döndürür (yerel tarih bazlı)
 function nextRunDate(r) {
-  const now = new Date();
-  const start = new Date(r.startDate);
-  const last  = r.lastProcessed ? new Date(r.lastProcessed) : null;
+  // YYYY-MM-DD string'ini yerel tarih olarak parse et (UTC bug'ını önle)
+  function parseLocal(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  const start = parseLocal(r.startDate);
+  const last  = r.lastProcessed ? parseLocal(r.lastProcessed) : null;
 
   if (r.freq === 'monthly') {
-    // Bu ay veya gelecek ay
-    let d = new Date(now.getFullYear(), now.getMonth(), r.day);
+    let d;
     if (last) {
-      // Son işlemden sonraki ay
+      // Son işlem ayından bir sonraki ay
       d = new Date(last.getFullYear(), last.getMonth() + 1, r.day);
+    } else {
+      // İlk çalışma: startDate'in ayından başla
+      d = new Date(start.getFullYear(), start.getMonth(), r.day);
     }
-    if (d < start) d = new Date(start.getFullYear(), start.getMonth(), r.day);
     return d;
   }
   if (r.freq === 'weekly') {
@@ -2336,17 +2417,27 @@ function nextRunDate(r) {
 }
 
 // Otomatik işlem uygula — app açılışında çağrılır
+// while döngüsü: birden fazla kaçırılan dönem varsa hepsini yakalar
 function processRecurring() {
-  const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
+  const todayStr = localDateStr(new Date()); // "2026-03-17" gibi
   let applied = 0;
 
   recurring.forEach(r => {
     if (!r.active) return;
-    const next = nextRunDate(r);
-    next.setHours(0, 0, 0, 0);
-    if (next <= todayDate) {
-      // İşlemi ekle
+
+    // Sonsuz döngü koruması
+    let safetyLimit = 60;
+
+    while (safetyLimit-- > 0) {
+      const next = nextRunDate(r);
+      const nextStr = localDateStr(next);
+
+      // Gelecekteyse veya bugünden sonraki bir tarihse dur
+      if (nextStr > todayStr) break;
+
+      // Aynı gün zaten işlendiyse dur (çift işleme engeli)
+      if (r.lastProcessed && r.lastProcessed >= nextStr) break;
+
       transactions.unshift({
         id:       uid(),
         type:     r.type,
@@ -2354,9 +2445,9 @@ function processRecurring() {
         currency: r.currency,
         category: r.category,
         note:     r.note + ' (otomatik)',
-        date:     next.toISOString().split('T')[0],
+        date:     nextStr,
       });
-      r.lastProcessed = next.toISOString().split('T')[0];
+      r.lastProcessed = nextStr;
       applied++;
     }
   });
@@ -2850,20 +2941,46 @@ function renderTxList() {
         </div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <p style="color:${t.type==='income'?'var(--green)':'var(--red)'};font-weight:600;font-size:15px;margin-bottom:4px">
+        <p style="color:${t.type==='income'?'var(--green)':'var(--red)'};font-weight:600;font-size:15px;margin-bottom:6px">
           ${t.type==='income'?'+':'-'}${fmt(t.amount,t.currency)}
         </p>
-        <button class="btn-delete" onclick="deleteTx(${t.id})">sil</button>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn-edit" onclick="editTx(${t.id})" title="Düzenle">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9.5 1.5 L12.5 4.5 L4.5 12.5 L1.5 12.5 L1.5 9.5 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
+              <path d="M8 3 L11 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="btn-delete" onclick="deleteTx(${t.id})" title="Sil">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 4 H12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M5 4 V2.5 Q5 2 5.5 2 H8.5 Q9 2 9 2.5 V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M3.5 4 L4 12 H10 L10.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M7 6.5 V10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M5.5 6.5 L5.7 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M8.5 6.5 L8.3 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   `).join('');
 }
 function deleteTx(id) {
-  transactions = transactions.filter(t=>t.id!==id);
+  transactions = transactions.filter(t => t.id !== id);
   saveData();
   renderTxList();
   renderDashboard();
   renderBudget();
+}
+
+function cancelEditTx() {
+  editingTxId = null;
+  document.getElementById('tx-save-btn').textContent   = 'Kaydet';
+  document.getElementById('tx-form-title').textContent = 'Yeni İşlem';
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('tx-note').value   = '';
+  toggleForm('tx-form');
 }
 
 function renderBudget() {
